@@ -296,16 +296,36 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
+    function _calculateHealthFactor(uint256 totalDscMinted, uint256 getAccountCollateralValueInUsd)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (totalDscMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold =
+            (getAccountCollateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
+    }
+
     ///////////////////////////////////
     //  Public & External View Functions //
     ///////////////////////////////////
 
+    /**
+     * @notice Returns the total amount of DSC minted for a user
+     * @param token Address of the user
+     * @param usdAmountInWei Value in Usd of the Wei Amount
+     */
     function getTokenAmountFromUsd(address token, uint256 usdAmountInWei) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
         return ((usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION));
     }
 
+    /**
+     * @notice Returns the amount of DSC that can be minted for a given amount of USD
+     * @param user Address of the user
+     */
     function getAccountCollateralValueInUsd(address user) public view returns (uint256 totalCollateralValueInUsd) {
         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
@@ -314,17 +334,77 @@ contract DSCEngine is ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice Returns the total collateral value in USD for a user
+     * @param token Address of the token
+     * @param amount Amount of The token
+     */
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION;
     }
 
+    /**
+     * @notice Get the total amount of DSC minted for a user and the total collateral value in USD.
+     * @param user Address of the user
+     * @return totalDscMinted Total Dsc Minted by the user
+     * @return collateralValueInUsd Total Collateral Value in USD deposited by the user
+     */
     function getAccountInformation(address user)
         external
         view
         returns (uint256 totalDscMinted, uint256 collateralValueInUsd)
     {
         (totalDscMinted, collateralValueInUsd) = _getAccountInformation(user);
+    }
+
+    /**
+     * @notice Calculates the HealthFactor based on the user's collateral and DSC minted.
+     * @param totalDscMinted Total Dsc Minted
+     * @param collateralValueInUsd The collateral value in USD
+     */
+    function calculatHealthFactor(uint256 totalDscMinted, uint256 collateralValueInUsd)
+        external
+        pure
+        returns (uint256)
+    {
+        return _calculateHealthFactor(totalDscMinted, collateralValueInUsd);
+    }
+
+    /**
+     * @notice Get the price feed address for a specific token
+     * @param token The address of the token
+     * @return The price feed address for the token
+     */
+    function getPriceFeedAddress(address token) external view returns (address) {
+        return s_priceFeeds[token];
+    }
+
+    /**
+     * @notice Get the amount of collateral deposited by a user for a specific token
+     * @param user The address of the user
+     * @param token The address of the token
+     * @return The amount of collateral deposited by the user for the token
+     */
+    function getCollateralDeposited(address user, address token) external view returns (uint256) {
+        return s_collateralDeposited[user][token];
+    }
+
+    /**
+     * @notice Get the total amount of DSC minted by a user
+     * @param user The address of the user
+     * @return The total amount of DSC minted by the user
+     */
+    function getTotalDscMinted(address user) external view returns (uint256) {
+        return s_DSCMinted[user];
+    }
+
+    /**
+     * @notice Get the list of collateral tokens
+     * @return The array of collateral token addresses
+     */
+    function getCollateralTokens() external view returns (address[] memory) {
+        return s_collateralTokens;
     }
 }
